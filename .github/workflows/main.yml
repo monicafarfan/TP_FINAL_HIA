@@ -1,31 +1,48 @@
-name: ci
+name: CI/CD
 
 on:
   push:
     branches:
-      - "main"
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
-        name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - name: Checkout del código
+        uses: actions/checkout@v2
+
+      - name: Configurar Docker
+        uses: actions/setup-node@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      -
-        name: Build and push
-        uses: docker/build-push-action@v5
+          node-version: '14'
+
+      - name: Construir y Publicar Backend
+        run: |
+          docker build -t ${{ secrets.REGISTRY_USERNAME }}/backend -f Dockerfile-backend .
+          echo ${{ secrets.REGISTRY_PASSWORD }} | docker login -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          docker push ${{ secrets.REGISTRY_USERNAME }}/backend
+
+      - name: Construir y Publicar Frontend
+        run: |
+          docker build -t ${{ secrets.REGISTRY_USERNAME }}/frontend -f Dockerfile-frontend .
+          echo ${{ secrets.REGISTRY_PASSWORD }} | docker login -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          docker push ${{ secrets.REGISTRY_USERNAME }}/frontend
+
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v2
+
+      - name: Configurar Docker
+        uses: actions/setup-node@v3
         with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tpfinal2023:latest
+          node-version: '14'
+
+      - name: Iniciar Contenedores
+        run: |
+          docker run -d --name backend ${{ secrets.REGISTRY_USERNAME }}/backend
+          docker run -d --name frontend -p 80:80 ${{ secrets.REGISTRY_USERNAME }}/frontend
